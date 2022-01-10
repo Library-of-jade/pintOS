@@ -24,6 +24,11 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/*Sleep list for threads*/
+static struct list sleep_list;
+/*Next tick to wake*/
+static int64_t next_wake_tick;
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -91,6 +96,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&sleep_list); /* Initialize the sleep queue */
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -383,6 +389,64 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
+
+/* Make thread sleep */
+void thread_sleep(int64_t ticks){
+  
+  struct thread *t = thread_current();
+  
+  ASSERT(t!=idle_thread);
+  enum intr_level old_level = intr_disable();
+
+  list_push_back(&sleep_list, &t->elem);
+
+  t->wakeup_tick = ticks;
+  set_min_tick(ticks);  
+
+  thread_block();
+
+  intr_set_level(old_level);
+  
+}
+/* set minimum value of tick */
+void set_min_tick(int64_t ticks){
+
+  next_wake_tick = (next_wake_tick > ticks)? ticks : next_wake_tick;
+
+}
+
+/* return minimum value of tick */
+int64_t get_min_tick(void){
+  
+  return next_wake_tick;
+
+}
+
+/* wake up next thread */
+void wake_up_thread(int64_t ticks){
+  
+  struct list_elem *it = list_begin(&sleep_list);
+  struct thread *t;
+
+  next_wake_tick = INT64_MAX;
+
+  while(it != list_end(&sleep_list)){
+    
+    t = list_entry(it, struct thread, elem);
+
+    if(t->wakeup_tick<=ticks){
+      it = list_remove(&t->elem);
+      thread_unblock(t);
+    }
+    else{
+      set_min_tick(t->wakeup_tick);
+      it = list_next(it);
+    }
+  }
+
+}
+
+
 
 /* Idle thread.  Executes when no other thread is ready to run.
 

@@ -139,9 +139,12 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* My code */
 void thread_sleep(int64_t ticks);
 void set_min_tick(int64_t ticks);
 int64_t get_min_tick(void);
 void wake_up_thread(int64_t ticks);
+bool cmp_priority(struct list_elem *e1, struct list_elem *e2, void *aux);
+bool check_preemption(void);
 
 #endif /* threads/thread.h */

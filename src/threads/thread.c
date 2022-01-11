@@ -215,6 +215,10 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+  /* Check preemption */
+  if(check_preemption())
+    thread_yield();
+
   return tid;
 }
 
@@ -251,7 +255,9 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // list_push_back (&ready_list, &t->elem);
+  /* Sort the ready list by the thread priority */
+  list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -322,7 +328,9 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    // list_push_back (&ready_list, &cur->elem);
+    /* Sort the ready list by the thread priority */
+    list_insert_ordered(&ready_list, &cur->elem, cmp_priority, NULL);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -349,7 +357,10 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
+  /* Change priority and check preemption */
   thread_current ()->priority = new_priority;
+  if(check_preemption())
+    thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -446,6 +457,36 @@ void wake_up_thread(int64_t ticks){
 
 }
 
+/* compare priority */
+bool cmp_priority(struct list_elem *e1, struct list_elem *e2, void* aux){
+  
+  struct thread *t1 = list_entry(e1, struct thread, elem);
+  struct thread *t2 = list_entry(e2, struct thread, elem);
+
+  if(t1 != NULL && t2 != NULL){
+    if(t1->priority > t2->priority)
+      return true;
+    else 
+      return false;
+  }
+
+  return false;
+}
+
+/* Check preemption */
+bool check_preemption(void){
+
+  if(list_empty(&ready_list))
+    return false;
+
+  struct thread *t_curr = thread_current();
+  struct thread *t_next = list_entry(list_front(&ready_list), struct thread, elem);
+
+  if(t_curr->priority < t_next->priority)
+    return true;
+  else
+    return false;
+}
 
 
 /* Idle thread.  Executes when no other thread is ready to run.

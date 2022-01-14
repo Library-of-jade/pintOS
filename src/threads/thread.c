@@ -358,7 +358,10 @@ void
 thread_set_priority (int new_priority) 
 {
   /* Change priority and check preemption */
-  thread_current ()->priority = new_priority;
+  thread_current ()->init_priority = new_priority;
+
+  refresh_priority();
+
   if(check_preemption())
     thread_yield();
 }
@@ -488,6 +491,54 @@ bool check_preemption(void){
     return false;
 }
 
+/* donate current thread priority to all thread linked with lock that current thread wait */
+void donate_priority(void){
+  
+  struct thread *cur = thread_current();
+  int depth = 8;
+  int cnt;
+  for(cnt = 0; cnt<depth; cnt++){
+    if(cur->wait_on_lock == NULL)
+      break;
+    struct thread *holder = cur->wait_on_lock->holder;
+    holder->priority = cur->priority;
+    cur = holder;
+  }
+
+}
+
+/* remove donation elements that have same lock from donation list */
+void remove_with_lock(struct lock *lock){
+
+  struct list_elem *e; /* list element that current thread donation list has */
+
+  for(e = list_begin(&(lock->holder)->donations); e != list_end(&(lock->holder)->donations); e = list_next(e)){
+    
+    struct thread *t = list_entry(e, struct thread, donation_elem);
+    /* compare lock that will released and the other lock that waiting */
+    if(t->wait_on_lock == lock){
+      /* remove element in donation list */
+      list_remove(&(t)->donation_elem);
+    }
+  }
+}
+
+/* update current thread priority*/
+void refresh_priority(void){
+
+  struct thread *cur = thread_current();
+
+  cur->priority = cur->init_priority;
+
+  if(!list_empty(&(cur)->donations)){
+    
+    int max_priority = list_entry(list_front(&(cur)->donations), struct thread, donation_elem)->priority;
+    
+    if(cur->priority < max_priority)
+      cur->priority = max_priority;  
+  }
+}
+
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
@@ -573,6 +624,13 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+
+  /* Set init_priority */
+  t->init_priority = priority;
+  /* initialize struct for priority donation */
+  t->wait_on_lock = NULL;
+  list_init(&(t)->donations);
+
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
 }

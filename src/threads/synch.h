@@ -42,8 +42,8 @@ void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
 
 /* My code */
-bool cmp_sem_priority(struct list_elem *e1, struct list_elem *e2, void *aux);
-
+bool cmp_sem_priority(struct list_elem *e1, struct list_elem *e2, void *aux);//compare priority inside sync(semaphore)
+bool cmp_lock_priority(struct list_elem *e1, struct list_elem *e2, void* aux); //compare priority inside sync (donation)
 /* Optimization barrier.
 
    The compiler will not reorder operations across an

@@ -94,6 +94,12 @@ struct thread
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
+    /* Priority donation */
+    int init_priority;
+    struct lock *wait_on_lock;
+    struct list donations;
+    struct list_elem donation_elem;
+
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
@@ -146,5 +152,8 @@ int64_t get_min_tick(void);
 void wake_up_thread(int64_t ticks);
 bool cmp_priority(struct list_elem *e1, struct list_elem *e2, void *aux);
 bool check_preemption(void);
+void donate_priority(void);
+void remove_with_lock(struct lock *lock);
+void refresh_priority(void);
 
 #endif /* threads/thread.h */

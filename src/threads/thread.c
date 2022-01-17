@@ -16,10 +16,6 @@
 #include "userprog/process.h"
 #endif
 
-/* For advanced schduler */
-#define NICE_DEFAULT 0
-#define RECENT_CPU_DEFAULT 0
-#define LOAD_AVG_DEFAULT 0
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -71,7 +67,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 bool thread_mlfqs;
 
 /* For advanced scheduler */
-int load_avg;
+static int load_avg;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -114,8 +110,8 @@ thread_init (void)
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
 
-  initial_thread->nice = NICE_DEFAULT;
-  initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
+  // initial_thread->nice = NICE_DEFAULT;
+  // initial_thread->recent_cpu = RECENT_CPU_DEFAULT;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -393,10 +389,8 @@ void
 thread_set_nice (int nice UNUSED) 
 {
   /* set nice of current thread */
-  enum intr_level old_level;
+  enum intr_level old_level = intr_disable();
   
-  old_level = intr_disable();
-
   thread_current()->nice = nice;
   mlfqs_update_priority(thread_current());
 
@@ -410,12 +404,10 @@ thread_set_nice (int nice UNUSED)
 int
 thread_get_nice (void) 
 {
-  enum intr_level old_level;
-  
-  old_level = intr_disable();
+  enum intr_level old_level = intr_disable();
   
   int nice = thread_current()->nice;
-  
+
   intr_set_level(old_level);
 
   return nice;
@@ -445,7 +437,7 @@ thread_get_recent_cpu (void)
   old_level = intr_disable();
 
   int recent_cpu_100_times = fp_to_int_round(mul_mixed(thread_current()->recent_cpu, 100));
-  
+
   intr_set_level(old_level);
   
   return recent_cpu_100_times;
@@ -591,22 +583,26 @@ void mlfqs_update_priority(struct thread *t){
 
   if(t != idle_thread){
     /* priority = PRI_MAX - (recent_cpu / 4) - (nice * 2) */
-    t->priority = fp_to_int(add_mixed(div_mixed(t->recent_cpu, -4), PRI_MAX - t->nice * 2));
+    t->priority = PRI_MAX - fp_to_int(div_mixed(t->recent_cpu, 4)) - t->nice * 2;
     
     if(t->priority > PRI_MAX)
       t->priority = PRI_MAX;
     else if(t->priority < PRI_MIN)
       t->priority = PRI_MIN;
   }
-
+  
 }
 
 /* update recnet_cpu (mlfqs) */
 void mlfqs_update_recent_cpu(struct thread *t){
 
   if(t != idle_thread){
+    enum intr_level old_level = intr_disable();
     /* (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice */
-    t->recent_cpu = add_mixed(mul_fp(div_fp(mul_mixed(load_avg, 2), add_mixed(mul_mixed(load_avg, 2), 1)), t->recent_cpu), t->nice);
+    int decay = div_fp(mul_mixed(load_avg, 2), add_mixed(mul_mixed(load_avg, 2), 1));
+    /* decay * recent_cpu + nice */
+    t->recent_cpu = add_mixed(mul_fp(t->recent_cpu, decay), t->nice);
+    intr_set_level(old_level);
   }
 
 }
@@ -629,12 +625,13 @@ void mlfqs_update_load_avg(void){
 /* increase recent_cpu (+1) */
 void mlfqs_recent_cpu_increment(void){
 
-  struct thread *t = running_thread();
+  struct thread *t = thread_current();
   
   if(t != idle_thread){
     /* recent_cpu++ */
     t->recent_cpu = add_mixed(t->recent_cpu, 1);
   }
+  
 }
 
 /* update recent_cpu and priority of all threads (mlfqs) */
@@ -643,7 +640,7 @@ void mlfqs_recalc(void){
   struct list_elem *e;  
 
   for(e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e)){
-    struct thread *t = list_entry(e, struct thread, elem);
+    struct thread *t = list_entry(e, struct thread, allelem);
     mlfqs_update_recent_cpu(t);
     mlfqs_update_priority(t);
   }
@@ -742,10 +739,9 @@ init_thread (struct thread *t, const char *name, int priority)
   /* initialize struct for priority donation */
   t->wait_on_lock = NULL;
   list_init(&(t)->donations);
-
   /*initialize nice, recent cpu*/
-  t->nice = running_thread()->nice;
-  t->recent_cpu = running_thread()->recent_cpu;
+  t->nice = NICE_DEFAULT;
+  t->recent_cpu = RECENT_CPU_DEFAULT;
 
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);

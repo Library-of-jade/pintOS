@@ -204,6 +204,13 @@ lock_acquire (struct lock *lock)
   ASSERT (!lock_held_by_current_thread (lock));
 
   struct thread *t = thread_current();
+
+  /*mlfqs is true -> priority donation deactivate*/
+  if(thread_mlfqs){
+    sema_down(&lock->semaphore);
+    lock->holder = t;
+    return;
+  }
   
   /* holder has thread -> current thread need to wait*/
   if(lock->holder != NULL){
@@ -247,6 +254,12 @@ lock_release (struct lock *lock)
 {
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
+
+  if(thread_mlfqs){
+    lock->holder = NULL;
+    sema_up(&lock->semaphore);
+    return;
+  }
 
   remove_with_lock(lock);
   refresh_priority();

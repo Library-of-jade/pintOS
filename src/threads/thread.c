@@ -415,9 +415,7 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  enum intr_level old_level;
-  
-  old_level = intr_disable();
+  enum intr_level old_level = intr_disable();
 
   int load_avg_100_times = fp_to_int_round(mul_mixed(load_avg, 100));
   
@@ -430,9 +428,7 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  enum intr_level old_level;
-  
-  old_level = intr_disable();
+  enum intr_level old_level = intr_disable();
 
   int recent_cpu_100_times = fp_to_int_round(mul_mixed(thread_current()->recent_cpu, 100));
 
